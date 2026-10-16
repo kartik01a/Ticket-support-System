@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Pagination } from "@/components/pagination";
 import { TicketFilters } from "@/components/ticket-filters";
 import { TicketTable, TicketTableSkeleton } from "@/components/ticket-table";
-import { ApiError, deleteTicket, listTickets } from "@/lib/api";
+import { deleteTicket, isApiError, listTickets } from "@/lib/api";
 import type { ListTicketsResponse, Ticket, TicketQuery } from "@/lib/types";
 
 const DEFAULT_QUERY: TicketQuery = { q: "", category: "", priority: "", sort: "newest", page: 1, limit: 10 };
@@ -37,7 +37,7 @@ export function TicketList({ refreshKey = 0 }: { refreshKey?: number }) {
       .then((data) => setState({ key: requestKey, data }))
       .catch((err: unknown) => {
         if (controller.signal.aborted) return; // superseded by a newer request
-        setState({ key: requestKey, error: err instanceof ApiError ? err.message : "Could not load tickets." });
+        setState({ key: requestKey, error: isApiError(err) ? err.message : "Could not load tickets." });
       });
     return () => controller.abort(); // discards stale responses
     // eslint-disable-next-line react-hooks/exhaustive-deps -- requestKey encodes query
@@ -59,8 +59,8 @@ export function TicketList({ refreshKey = 0 }: { refreshKey?: number }) {
       toast.success("Ticket deleted");
     } catch (err) {
       // A 404 means it is already gone (e.g. deleted in another tab): refresh instead of reporting a failure.
-      if (!(err instanceof ApiError && err.status === 404)) {
-        toast.error(err instanceof ApiError ? err.message : "Could not delete the ticket.");
+      if (!(isApiError(err) && err.status === 404)) {
+        toast.error(isApiError(err) ? err.message : "Could not delete the ticket.");
         setDeletingId(null);
         return;
       }

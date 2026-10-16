@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TicketList } from "@/components/ticket-list";
 import { toast } from "sonner";
-import { ApiError, deleteTicket, listTickets } from "@/lib/api";
+import { createApiError, deleteTicket, listTickets } from "@/lib/api";
 import { makeList, makeTicket } from "./fixtures";
 
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
@@ -52,7 +52,7 @@ describe("TicketList", () => {
 
   it("shows an error with a working retry button", async () => {
     const user = userEvent.setup();
-    mockList.mockRejectedValueOnce(new ApiError(0, "NETWORK_ERROR", "Could not reach the server."));
+    mockList.mockRejectedValueOnce(createApiError(0, "NETWORK_ERROR", "Could not reach the server."));
     render(<TicketList />);
 
     expect(await screen.findByText("Could not reach the server.")).toBeInTheDocument();
@@ -171,7 +171,7 @@ describe("TicketList", () => {
     it("keeps the row and shows an error toast when deleting fails", async () => {
       const user = userEvent.setup();
       mockList.mockResolvedValue(two);
-      mockDelete.mockRejectedValue(new ApiError(500, "INTERNAL_ERROR", "Something went wrong"));
+      mockDelete.mockRejectedValue(createApiError(500, "INTERNAL_ERROR", "Something went wrong"));
       render(<TicketList />);
       await screen.findByText("First");
 
@@ -185,7 +185,7 @@ describe("TicketList", () => {
     it("treats a 404 (already deleted) as success and refreshes", async () => {
       const user = userEvent.setup();
       mockList.mockResolvedValueOnce(two).mockResolvedValue(makeList([makeTicket({ id: "b", title: "Second" })]));
-      mockDelete.mockRejectedValue(new ApiError(404, "TICKET_NOT_FOUND", "Ticket not found"));
+      mockDelete.mockRejectedValue(createApiError(404, "TICKET_NOT_FOUND", "Ticket not found"));
       render(<TicketList />);
       await screen.findByText("First");
 

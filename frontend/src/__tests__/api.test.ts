@@ -1,4 +1,4 @@
-import { ApiError, buildTicketsQueryString, createTicket, deleteTicket, listTickets } from "@/lib/api";
+import { buildTicketsQueryString, createTicket, deleteTicket, isApiError, listTickets } from "@/lib/api";
 import { makeList, makeTicket } from "./fixtures";
 
 const jsonResponse = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body }) as Response;
@@ -51,7 +51,7 @@ describe("createTicket", () => {
   it("turns network failures into a friendly ApiError", async () => {
     fetchMock.mockRejectedValue(new TypeError("fetch failed"));
     const error = await createTicket({ title: "t", description: "d", customerEmail: "a@b.com" }).catch((e) => e);
-    expect(error).toBeInstanceOf(ApiError);
+    expect(isApiError(error)).toBe(true);
     expect(error.code).toBe("NETWORK_ERROR");
     expect(error.message).toMatch(/backend is running/);
   });

@@ -7,17 +7,23 @@ export interface FieldError {
   message: string;
 }
 
+const API_ERROR = Symbol("ApiError");
+
 /** Error from the API or the network. `message` is always safe to show to users. */
-export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly code: string,
-    message: string,
-    public readonly details: FieldError[] = [],
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
+export interface ApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly details: FieldError[];
+}
+
+export function createApiError(status: number, code: string, message: string, details: FieldError[] = []): ApiError {
+  const error = new Error(message);
+  error.name = "ApiError";
+  return Object.assign(error, { status, code, details, [API_ERROR]: true }) as ApiError;
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof Error && API_ERROR in error;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -26,7 +32,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     response = await fetch(`${API_URL}${path}`, init);
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
-    throw new ApiError(0, "NETWORK_ERROR", "Could not reach the server. Check that the backend is running and try again.");
+    throw createApiError(0, "NETWORK_ERROR", "Could not reach the server. Check that the backend is running and try again.");
   }
 
   if (response.status === 204) return undefined as T;
@@ -40,7 +46,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const error = (body as { error?: { code?: string; message?: string; details?: FieldError[] } } | undefined)?.error;
-    throw new ApiError(
+    throw createApiError(
       response.status,
       error?.code ?? "UNKNOWN_ERROR",
       error?.message ?? "Something went wrong. Please try again.",

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TicketForm } from "@/components/ticket-form";
-import { ApiError, createTicket } from "@/lib/api";
+import { createApiError, createTicket } from "@/lib/api";
 import { makeTicket } from "./fixtures";
 
 jest.mock("sonner", () => ({ toast: { success: jest.fn() } }));
@@ -87,7 +87,7 @@ describe("TicketForm", () => {
 
   it("shows an error alert (and keeps the user's input) when the request fails", async () => {
     const user = userEvent.setup();
-    mockCreate.mockRejectedValue(new ApiError(0, "NETWORK_ERROR", "Could not reach the server."));
+    mockCreate.mockRejectedValue(createApiError(0, "NETWORK_ERROR", "Could not reach the server."));
     render(<TicketForm />);
 
     await fillValid(user);
@@ -103,7 +103,7 @@ describe("TicketForm", () => {
   it("maps server-side field errors onto the matching inputs", async () => {
     const user = userEvent.setup();
     mockCreate.mockRejectedValue(
-      new ApiError(400, "VALIDATION_ERROR", "Request validation failed", [{ field: "customerEmail", message: "Customer email must be a valid email address" }]),
+      createApiError(400, "VALIDATION_ERROR", "Request validation failed", [{ field: "customerEmail", message: "Customer email must be a valid email address" }]),
     );
     render(<TicketForm />);
 

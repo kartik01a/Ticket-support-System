@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, createTicket } from "@/lib/api";
+import { createTicket, isApiError } from "@/lib/api";
 import type { NewTicketInput, Ticket } from "@/lib/types";
 import { validateTicketForm, type FormErrors } from "@/lib/validation";
 
@@ -56,7 +56,7 @@ export function TicketForm({ onCreated }: { onCreated?: (ticket: Ticket) => void
       onCreated?.(ticket);
     } catch (err) {
       setStatus("error");
-      if (err instanceof ApiError && err.details.length > 0) {
+      if (isApiError(err) && err.details.length > 0) {
         const fieldErrors: FormErrors = {};
         for (const d of err.details) {
           if (d.field in EMPTY && !fieldErrors[d.field as keyof NewTicketInput]) {
@@ -65,7 +65,7 @@ export function TicketForm({ onCreated }: { onCreated?: (ticket: Ticket) => void
         }
         setErrors(fieldErrors);
       }
-      setErrorMessage(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setErrorMessage(isApiError(err) ? err.message : "Something went wrong. Please try again.");
     }
   }
 
