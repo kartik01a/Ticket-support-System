@@ -1,5 +1,5 @@
 import type { ErrorRequestHandler } from 'express';
-import { AppError } from '../errors/app-error';
+import { isAppError } from '../errors/app-error';
 import type { Logger } from '../services/ticket.service';
 
 interface ErrorLogger extends Logger {
@@ -12,7 +12,7 @@ export const createErrorHandler =
   (err, _req, res, next) => {
     if (res.headersSent) return next(err);
 
-    if (err instanceof AppError) {
+    if (isAppError(err)) {
       return res
         .status(err.status)
         .json({ error: { code: err.code, message: err.message, ...(err.details && { details: err.details }) } });

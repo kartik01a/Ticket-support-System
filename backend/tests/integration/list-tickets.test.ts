@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { FakeClassifier } from '../helpers/fake-classifier';
+import { fakeReturning } from '../helpers/fake-classifier';
 import { buildTestApp } from '../helpers/test-app';
 
 const seed = [
@@ -10,7 +10,7 @@ const seed = [
 ] as const;
 
 async function seeded() {
-  const ctx = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+  const ctx = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
   for (const t of seed) {
     ctx.repository.create({ ...t, aiStatus: 'classified', aiFallbackReason: null });
     await new Promise((r) => setTimeout(r, 2)); // distinct created_at values
@@ -47,14 +47,14 @@ describe('GET /api/tickets', () => {
   });
 
   it('returns an empty list with valid pagination when there are no tickets', async () => {
-    const { app } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+    const { app } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
     const res = await request(app).get('/api/tickets');
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ data: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 1 } });
   });
 
   it('lists a ticket created through POST', async () => {
-    const { app } = buildTestApp(FakeClassifier.returning({ category: 'Billing', priority: 'Low' }));
+    const { app } = buildTestApp(fakeReturning({ category: 'Billing', priority: 'Low' }));
     await request(app).post('/api/tickets').send({ title: 'T', description: 'D', customerEmail: 'z@x.com' });
     const res = await request(app).get('/api/tickets');
     expect(res.body.data).toHaveLength(1);

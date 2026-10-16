@@ -1,5 +1,6 @@
 import { classificationSchema, parseClassification, validateClassification } from '../../src/services/ai/classification';
-import { ClassifierError } from '../../src/services/ai/types';
+import { isClassifierError, type ClassifierError } from '../../src/services/ai/types';
+import { expectClassifierError } from '../helpers/classifier-error';
 
 describe('parseClassification (AI output is untrusted)', () => {
   it.each([
@@ -21,18 +22,18 @@ describe('parseClassification (AI output is untrusted)', () => {
     [null],
     [['High']],
   ])('rejects invalid priority %p', (priority) => {
-    expect(() => parseClassification(JSON.stringify({ category: 'Technical', priority }))).toThrow(ClassifierError);
+    expectClassifierError(() => parseClassification(JSON.stringify({ category: 'Technical', priority })));
   });
 
   it.each([['Sales'], ['technical'], [''], [null]])('rejects invalid category %p', (category) => {
-    expect(() => parseClassification(JSON.stringify({ category, priority: 'High' }))).toThrow(ClassifierError);
+    expectClassifierError(() => parseClassification(JSON.stringify({ category, priority: 'High' })));
   });
 
   it('rejects extra keys, missing keys, and non-object JSON', () => {
-    expect(() => parseClassification('{"category":"Technical","priority":"High","admin":true}')).toThrow(ClassifierError);
-    expect(() => parseClassification('{"category":"Technical"}')).toThrow(ClassifierError);
-    expect(() => parseClassification('"Technical"')).toThrow(ClassifierError);
-    expect(() => parseClassification('[]')).toThrow(ClassifierError);
+    expectClassifierError(() => parseClassification('{"category":"Technical","priority":"High","admin":true}'));
+    expectClassifierError(() => parseClassification('{"category":"Technical"}'));
+    expectClassifierError(() => parseClassification('"Technical"'));
+    expectClassifierError(() => parseClassification('[]'));
   });
 
   it.each([[undefined], [null], [''], ['not json'], ['{"category": "Tech']])('rejects empty/non-JSON output %p', (raw) => {
@@ -40,7 +41,7 @@ describe('parseClassification (AI output is untrusted)', () => {
     try {
       parseClassification(raw as string | null | undefined);
     } catch (err) {
-      expect(err).toBeInstanceOf(ClassifierError);
+      expect(isClassifierError(err)).toBe(true);
       expect((err as ClassifierError).reason).toBe('invalid_response');
     }
   });

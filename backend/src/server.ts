@@ -2,11 +2,11 @@ import 'dotenv/config';
 import { createApp, type AppLogger } from './app';
 import { loadEnv } from './config/env';
 import { openDatabase } from './db/connection';
-import { TicketRepository } from './repositories/ticket.repository';
-import { OpenAiClassifier } from './services/ai/openai.classifier';
+import { createTicketRepository } from './repositories/ticket.repository';
+import { createOpenAiClassifier } from './services/ai/openai.classifier';
 import type { TicketClassifier } from './services/ai/types';
-import { UnavailableClassifier } from './services/ai/unavailable.classifier';
-import { TicketService } from './services/ticket.service';
+import { createUnavailableClassifier } from './services/ai/unavailable.classifier';
+import { createTicketService } from './services/ticket.service';
 
 const logger: AppLogger = {
   warn: (message, meta) => console.warn(`[warn] ${message}`, meta ?? ''),
@@ -18,14 +18,14 @@ const db = openDatabase(env.DATABASE_PATH);
 
 let classifier: TicketClassifier;
 if (env.OPENAI_API_KEY) {
-  classifier = new OpenAiClassifier({ apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL, timeoutMs: env.AI_TIMEOUT_MS });
+  classifier = createOpenAiClassifier({ apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL, timeoutMs: env.AI_TIMEOUT_MS });
 } else {
   logger.warn('OPENAI_API_KEY is not set: tickets will use the fallback classification (General / Medium).');
-  classifier = new UnavailableClassifier();
+  classifier = createUnavailableClassifier();
 }
 
-const ticketService = new TicketService({
-  repository: new TicketRepository(db),
+const ticketService = createTicketService({
+  repository: createTicketRepository(db),
   classifier,
   aiTimeoutMs: env.AI_TIMEOUT_MS,
   logger,

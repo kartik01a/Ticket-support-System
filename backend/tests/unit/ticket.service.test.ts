@@ -1,22 +1,22 @@
 import { openDatabase } from '../../src/db/connection';
-import { TicketRepository } from '../../src/repositories/ticket.repository';
-import { ClassifierError } from '../../src/services/ai/types';
-import { UnavailableClassifier } from '../../src/services/ai/unavailable.classifier';
-import { TicketService } from '../../src/services/ticket.service';
-import { withTimeout, TimeoutError } from '../../src/utils/with-timeout';
-import { FakeClassifier } from '../helpers/fake-classifier';
+import { createTicketRepository } from '../../src/repositories/ticket.repository';
+import { createClassifierError, type TicketClassifier } from '../../src/services/ai/types';
+import { createUnavailableClassifier } from '../../src/services/ai/unavailable.classifier';
+import { createTicketService } from '../../src/services/ticket.service';
+import { isTimeoutError, withTimeout } from '../../src/utils/with-timeout';
+import { createFakeClassifier, fakeFailing, fakeReturning } from '../helpers/fake-classifier';
 
 const input = { title: 'T', description: 'D', customerEmail: 'a@b.com' };
 
-const make = (classifier: ConstructorParameters<typeof TicketService>[0]['classifier'], aiTimeoutMs = 100) => {
-  const repository = new TicketRepository(openDatabase(':memory:'));
+const make = (classifier: TicketClassifier, aiTimeoutMs = 100) => {
+  const repository = createTicketRepository(openDatabase(':memory:'));
   const warn = jest.fn();
-  return { service: new TicketService({ repository, classifier, aiTimeoutMs, logger: { warn } }), repository, warn };
+  return { service: createTicketService({ repository, classifier, aiTimeoutMs, logger: { warn } }), repository, warn };
 };
 
 describe('TicketService.createTicket', () => {
   it('stores the AI classification', async () => {
-    const { service, repository } = make(FakeClassifier.returning({ category: 'Billing', priority: 'High' }));
+    const { service, repository } = make(fakeReturning({ category: 'Billing', priority: 'High' }));
     const ticket = await service.createTicket(input);
     expect(ticket).toMatchObject({ category: 'Billing', priority: 'High', aiStatus: 'classified', aiFallbackReason: null });
     expect(repository.count()).toBe(1);
@@ -24,7 +24,7 @@ describe('TicketService.createTicket', () => {
 
   it('uses the fallback with reason "timeout" and aborts the AI call', async () => {
     let signal: AbortSignal | undefined;
-    const { service, warn } = make(new FakeClassifier(async (_i, s) => { signal = s; return new Promise(() => undefined); }), 30);
+    const { service, warn } = make(createFakeClassifier(async (_i, s) => { signal = s; return new Promise(() => undefined); }), 30);
     const ticket = await service.createTicket(input);
     expect(ticket).toMatchObject({ category: 'General', priority: 'Medium', aiStatus: 'fallback', aiFallbackReason: 'timeout' });
     expect(signal?.aborted).toBe(true);
@@ -32,35 +32,35 @@ describe('TicketService.createTicket', () => {
   });
 
   it.each(['ai_error', 'invalid_response', 'ai_unavailable'] as const)('maps ClassifierError(%s) to the fallback reason', async (reason) => {
-    const { service } = make(FakeClassifier.failing(new ClassifierError(reason, 'x')));
+    const { service } = make(fakeFailing(createClassifierError(reason, 'x')));
     expect((await service.createTicket(input)).aiFallbackReason).toBe(reason);
   });
 
   it('treats unknown errors as ai_error', async () => {
-    const { service } = make(FakeClassifier.failing(new Error('network')));
+    const { service } = make(fakeFailing(new Error('network')));
     expect((await service.createTicket(input)).aiFallbackReason).toBe('ai_error');
   });
 
   it('re-validates classifier output even if the classifier lied about its type', async () => {
-    const { service } = make(FakeClassifier.returning({ category: 'Technical', priority: 'Urgent' }));
+    const { service } = make(fakeReturning({ category: 'Technical', priority: 'Urgent' }));
     expect(await service.createTicket(input)).toMatchObject({ priority: 'Medium', aiFallbackReason: 'invalid_response' });
   });
 
   it('works without a logger', async () => {
-    const repository = new TicketRepository(openDatabase(':memory:'));
-    const service = new TicketService({ repository, classifier: FakeClassifier.failing(new Error('x')), aiTimeoutMs: 50 });
+    const repository = createTicketRepository(openDatabase(':memory:'));
+    const service = createTicketService({ repository, classifier: fakeFailing(new Error('x')), aiTimeoutMs: 50 });
     expect((await service.createTicket(input)).aiStatus).toBe('fallback');
   });
 
   it('UnavailableClassifier (no API key) always yields the ai_unavailable fallback', async () => {
-    const { service } = make(new UnavailableClassifier());
+    const { service } = make(createUnavailableClassifier());
     expect(await service.createTicket(input)).toMatchObject({ aiStatus: 'fallback', aiFallbackReason: 'ai_unavailable' });
   });
 });
 
 describe('TicketService.listTickets', () => {
   it('computes totalPages', () => {
-    const { service, repository } = make(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+    const { service, repository } = make(fakeReturning({ category: 'General', priority: 'Low' }));
     for (let i = 0; i < 5; i++) repository.create({ ...input, category: 'General', priority: 'Low', aiStatus: 'classified', aiFallbackReason: null });
     expect(service.listTickets({ sort: 'newest', page: 1, limit: 2 }).pagination).toEqual({ page: 1, limit: 2, total: 5, totalPages: 3 });
   });
@@ -71,7 +71,9 @@ describe('withTimeout', () => {
     await expect(withTimeout(async () => 42, 50)).resolves.toBe(42);
   });
   it('rejects with TimeoutError when the task hangs', async () => {
-    await expect(withTimeout(() => new Promise(() => undefined), 20)).rejects.toBeInstanceOf(TimeoutError);
+    const error = await withTimeout(() => new Promise(() => undefined), 20).catch((e: unknown) => e);
+    expect(isTimeoutError(error)).toBe(true);
+    expect((error as Error).name).toBe('TimeoutError');
   });
   it('propagates task errors', async () => {
     await expect(withTimeout(async () => { throw new Error('nope'); }, 50)).rejects.toThrow('nope');

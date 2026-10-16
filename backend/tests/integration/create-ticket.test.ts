@@ -1,11 +1,11 @@
 import request from 'supertest';
-import { FakeClassifier } from '../helpers/fake-classifier';
+import { fakeReturning, fakeFailing, fakeHanging } from '../helpers/fake-classifier';
 import { buildTestApp, validTicket } from '../helpers/test-app';
 
 describe('POST /api/tickets', () => {
   describe('validation', () => {
     it('rejects a missing title with a clear validation error and creates nothing', async () => {
-      const classifier = FakeClassifier.returning({ category: 'Technical', priority: 'High' });
+      const classifier = fakeReturning({ category: 'Technical', priority: 'High' });
       const { app, repository } = buildTestApp(classifier);
 
       const res = await request(app)
@@ -20,7 +20,7 @@ describe('POST /api/tickets', () => {
     });
 
     it('rejects a blank (whitespace-only) title', async () => {
-      const { app, repository } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+      const { app, repository } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
       const res = await request(app).post('/api/tickets').send({ ...validTicket, title: '   ' });
       expect(res.status).toBe(400);
       expect(res.body.error.details[0].field).toBe('title');
@@ -28,7 +28,7 @@ describe('POST /api/tickets', () => {
     });
 
     it('rejects an invalid customer email and does not create a ticket', async () => {
-      const classifier = FakeClassifier.returning({ category: 'Technical', priority: 'High' });
+      const classifier = fakeReturning({ category: 'Technical', priority: 'High' });
       const { app, repository } = buildTestApp(classifier);
 
       const res = await request(app).post('/api/tickets').send({ ...validTicket, customerEmail: 'not-an-email' });
@@ -43,7 +43,7 @@ describe('POST /api/tickets', () => {
     });
 
     it('reports every invalid field at once', async () => {
-      const { app } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+      const { app } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
       const res = await request(app).post('/api/tickets').send({});
       expect(res.status).toBe(400);
       expect(res.body.error.details.map((d: { field: string }) => d.field).sort()).toEqual([
@@ -54,7 +54,7 @@ describe('POST /api/tickets', () => {
     });
 
     it('ignores client-supplied category/priority', async () => {
-      const { app } = buildTestApp(FakeClassifier.returning({ category: 'Billing', priority: 'Low' }));
+      const { app } = buildTestApp(fakeReturning({ category: 'Billing', priority: 'Low' }));
       const res = await request(app)
         .post('/api/tickets')
         .send({ ...validTicket, category: 'Technical', priority: 'High', id: 'attacker-id' });
@@ -64,14 +64,14 @@ describe('POST /api/tickets', () => {
     });
 
     it('rejects malformed JSON with 400 INVALID_JSON', async () => {
-      const { app } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+      const { app } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
       const res = await request(app).post('/api/tickets').set('Content-Type', 'application/json').send('{"title": ');
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_JSON');
     });
 
     it('rejects an oversized body with 413', async () => {
-      const { app } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+      const { app } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
       const res = await request(app)
         .post('/api/tickets')
         .send({ ...validTicket, description: 'x'.repeat(20_000) });
@@ -82,7 +82,7 @@ describe('POST /api/tickets', () => {
 
   describe('valid ticket', () => {
     it('classifies, saves and returns the ticket with the expected fields', async () => {
-      const classifier = FakeClassifier.returning({ category: 'Technical', priority: 'High' });
+      const classifier = fakeReturning({ category: 'Technical', priority: 'High' });
       const { app, repository } = buildTestApp(classifier);
 
       const res = await request(app)
@@ -114,7 +114,7 @@ describe('POST /api/tickets', () => {
       const secret = 'sk-test-SECRET-1234';
       process.env.OPENAI_API_KEY = secret;
       try {
-        const { app, repository, warnings } = buildTestApp(FakeClassifier.hanging(), { aiTimeoutMs: 50 });
+        const { app, repository, warnings } = buildTestApp(fakeHanging(), { aiTimeoutMs: 50 });
 
         const res = await request(app).post('/api/tickets').send(validTicket);
 
@@ -138,7 +138,7 @@ describe('POST /api/tickets', () => {
     });
 
     it('handles the AI throwing an unexpected error', async () => {
-      const { app } = buildTestApp(FakeClassifier.failing(new Error('boom: upstream 500 with sk-leak')));
+      const { app } = buildTestApp(fakeFailing(new Error('boom: upstream 500 with sk-leak')));
       const res = await request(app).post('/api/tickets').send(validTicket);
       expect(res.status).toBe(201);
       expect(res.body.data).toMatchObject({ aiStatus: 'fallback', aiFallbackReason: 'ai_error' });
@@ -153,7 +153,7 @@ describe('POST /api/tickets', () => {
       ['a non-object response', 'Technical/High'],
       ['null', null],
     ])('rejects %s from the AI and falls back', async (_label, aiOutput) => {
-      const { app, repository } = buildTestApp(FakeClassifier.returning(aiOutput));
+      const { app, repository } = buildTestApp(fakeReturning(aiOutput));
 
       const res = await request(app).post('/api/tickets').send(validTicket);
 

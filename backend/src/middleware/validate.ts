@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 import type { ZodType } from 'zod';
-import { AppError, type ErrorDetail } from '../errors/app-error';
+import { createAppError, type ErrorDetail } from '../errors/app-error';
 
 function toDetails(issues: { path: PropertyKey[]; message: string }[]): ErrorDetail[] {
   return issues.map((i) => ({ field: i.path.map(String).join('.') || 'body', message: i.message }));
@@ -12,7 +12,7 @@ export const validateBody =
   (req, _res, next) => {
     const result = schema.safeParse(req.body ?? {});
     if (!result.success) {
-      return next(new AppError(400, 'VALIDATION_ERROR', 'Request validation failed', toDetails(result.error.issues)));
+      return next(createAppError(400, 'VALIDATION_ERROR', 'Request validation failed', toDetails(result.error.issues)));
     }
     req.body = result.data;
     next();
@@ -24,7 +24,7 @@ export const validateParams =
   (req, res, next) => {
     const result = schema.safeParse(req.params);
     if (!result.success) {
-      return next(new AppError(400, 'VALIDATION_ERROR', 'Invalid path parameters', toDetails(result.error.issues)));
+      return next(createAppError(400, 'VALIDATION_ERROR', 'Invalid path parameters', toDetails(result.error.issues)));
     }
     res.locals.params = result.data;
     next();
@@ -36,7 +36,7 @@ export const validateQuery =
   (req, res, next) => {
     const result = schema.safeParse(req.query);
     if (!result.success) {
-      return next(new AppError(400, 'VALIDATION_ERROR', 'Invalid query parameters', toDetails(result.error.issues)));
+      return next(createAppError(400, 'VALIDATION_ERROR', 'Invalid query parameters', toDetails(result.error.issues)));
     }
     res.locals.query = result.data;
     next();

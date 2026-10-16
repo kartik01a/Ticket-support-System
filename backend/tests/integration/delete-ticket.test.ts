@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { FakeClassifier } from '../helpers/fake-classifier';
+import { fakeReturning } from '../helpers/fake-classifier';
 import { buildTestApp, validTicket } from '../helpers/test-app';
 
-const make = () => buildTestApp(FakeClassifier.returning({ category: 'Technical', priority: 'High' }));
+const make = () => buildTestApp(fakeReturning({ category: 'Technical', priority: 'High' }));
 
 describe('DELETE /api/tickets/:id', () => {
   it('deletes an existing ticket and returns 204 with no body', async () => {

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { classificationJsonSchema, parseClassification } from './classification';
-import { ClassifierError, type Classification, type ClassifierInput, type TicketClassifier } from './types';
+import { createClassifierError, isClassifierError, type Classification, type ClassifierInput, type TicketClassifier } from './types';
 
 const SYSTEM_PROMPT = `You triage customer support tickets.
 Classify each ticket into exactly one category and one priority.
@@ -30,46 +30,41 @@ export interface OpenAiClassifierOptions {
   client?: Pick<OpenAI, 'chat'>;
 }
 
-export class OpenAiClassifier implements TicketClassifier {
-  private readonly client: Pick<OpenAI, 'chat'>;
-  private readonly model: string;
+export function createOpenAiClassifier({ apiKey, model, timeoutMs, client }: OpenAiClassifierOptions): TicketClassifier {
+  const openai = client ?? new OpenAI({ apiKey, timeout: timeoutMs, maxRetries: 1 });
 
-  constructor(options: OpenAiClassifierOptions) {
-    this.model = options.model;
-    this.client =
-      options.client ?? new OpenAI({ apiKey: options.apiKey, timeout: options.timeoutMs, maxRetries: 1 });
-  }
-
-  async classify(input: ClassifierInput, signal?: AbortSignal): Promise<Classification> {
-    let content: string | null | undefined;
-    try {
-      const completion = await this.client.chat.completions.create(
-        {
-          model: this.model,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: buildUserPrompt(input) },
-          ],
-          response_format: {
-            type: 'json_schema',
-            json_schema: { name: 'ticket_classification', strict: true, schema: classificationJsonSchema },
+  return {
+    async classify(input: ClassifierInput, signal?: AbortSignal): Promise<Classification> {
+      let content: string | null | undefined;
+      try {
+        const completion = await openai.chat.completions.create(
+          {
+            model,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: buildUserPrompt(input) },
+            ],
+            response_format: {
+              type: 'json_schema',
+              json_schema: { name: 'ticket_classification', strict: true, schema: classificationJsonSchema },
+            },
+            max_completion_tokens: 2000,
           },
-          max_completion_tokens: 2000,
-        },
-        { signal },
-      );
-      const message = completion.choices?.[0]?.message;
-      if (message?.refusal) throw new ClassifierError('invalid_response', 'AI refused to classify the ticket');
-      content = message?.content;
-    } catch (err) {
-      if (err instanceof ClassifierError) throw err;
-      const name = err instanceof Error ? err.name : '';
-      const timedOut = signal?.aborted || name === 'APIConnectionTimeoutError' || name === 'TimeoutError';
-      // Only the error class is kept in the message; the raw SDK error may contain request details.
-      throw new ClassifierError(timedOut ? 'timeout' : 'ai_error', `OpenAI request failed (${name || 'unknown'})`, {
-        cause: err,
-      });
-    }
-    return parseClassification(content);
-  }
+          { signal },
+        );
+        const message = completion.choices?.[0]?.message;
+        if (message?.refusal) throw createClassifierError('invalid_response', 'AI refused to classify the ticket');
+        content = message?.content;
+      } catch (err) {
+        if (isClassifierError(err)) throw err;
+        const name = err instanceof Error ? err.name : '';
+        const timedOut = signal?.aborted || name === 'APIConnectionTimeoutError' || name === 'TimeoutError';
+        // Only the error class is kept in the message; the raw SDK error may contain request details.
+        throw createClassifierError(timedOut ? 'timeout' : 'ai_error', `OpenAI request failed (${name || 'unknown'})`, {
+          cause: err,
+        });
+      }
+      return parseClassification(content);
+    },
+  };
 }

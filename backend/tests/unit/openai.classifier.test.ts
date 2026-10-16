@@ -1,13 +1,12 @@
-import { OpenAiClassifier } from '../../src/services/ai/openai.classifier';
-import { ClassifierError } from '../../src/services/ai/types';
+import { createOpenAiClassifier, type OpenAiClassifierOptions } from '../../src/services/ai/openai.classifier';
 
 const input = { title: 'Cannot log in', description: 'Error 500' };
 
 /** A stand-in for the OpenAI SDK client: no network, no key. */
 function fakeClient(create: jest.Mock) {
-  return { chat: { completions: { create } } } as unknown as ConstructorParameters<typeof OpenAiClassifier>[0]['client'];
+  return { chat: { completions: { create } } } as unknown as OpenAiClassifierOptions['client'];
 }
-const make = (create: jest.Mock) => new OpenAiClassifier({ apiKey: 'sk-test', model: 'test-model', timeoutMs: 1000, client: fakeClient(create) });
+const make = (create: jest.Mock) => createOpenAiClassifier({ apiKey: 'sk-test', model: 'test-model', timeoutMs: 1000, client: fakeClient(create) });
 const reply = (content: string | null, refusal: string | null = null) => ({ choices: [{ message: { content, refusal } }] });
 
 describe('OpenAiClassifier', () => {
@@ -57,7 +56,7 @@ describe('OpenAiClassifier', () => {
   it('maps other SDK errors to "ai_error" without leaking the upstream message', async () => {
     const create = jest.fn().mockRejectedValue(Object.assign(new Error('401 Incorrect API key provided: sk-live-abc'), { name: 'AuthenticationError' }));
     const promise = make(create).classify(input);
-    await expect(promise).rejects.toBeInstanceOf(ClassifierError);
+    await expect(promise).rejects.toMatchObject({ name: 'ClassifierError' });
     await expect(promise).rejects.toMatchObject({ reason: 'ai_error', message: 'OpenAI request failed (AuthenticationError)' });
   });
 });

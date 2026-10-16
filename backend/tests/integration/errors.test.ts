@@ -1,19 +1,19 @@
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import { TicketService } from '../../src/services/ticket.service';
-import { FakeClassifier } from '../helpers/fake-classifier';
+import { fakeReturning } from '../helpers/fake-classifier';
 import { buildTestApp, validTicket } from '../helpers/test-app';
 
 describe('error handling & platform behaviour', () => {
   it('GET /health returns ok', async () => {
-    const { app } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+    const { app } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: 'ok' });
   });
 
   it('returns a consistent 404 for unknown routes', async () => {
-    const { app } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+    const { app } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
     const res = await request(app).get('/api/nope');
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
@@ -38,14 +38,14 @@ describe('error handling & platform behaviour', () => {
   });
 
   it('sets security headers and hides x-powered-by', async () => {
-    const { app } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }));
+    const { app } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }));
     const res = await request(app).get('/health');
     expect(res.headers['x-powered-by']).toBeUndefined();
     expect(res.headers['x-content-type-options']).toBe('nosniff');
   });
 
   it('rate limits ticket creation with 429 when enabled', async () => {
-    const { app } = buildTestApp(FakeClassifier.returning({ category: 'General', priority: 'Low' }), { rateLimitPerMinute: 2 });
+    const { app } = buildTestApp(fakeReturning({ category: 'General', priority: 'Low' }), { rateLimitPerMinute: 2 });
     expect((await request(app).post('/api/tickets').send(validTicket)).status).toBe(201);
     expect((await request(app).post('/api/tickets').send(validTicket)).status).toBe(201);
     const third = await request(app).post('/api/tickets').send(validTicket);

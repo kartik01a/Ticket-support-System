@@ -219,14 +219,14 @@ curl -X DELETE http://localhost:4000/api/tickets/0b6c2c1e-6f0e-4c53-9f57-2a1f7c1
 
 Code: [backend/src/services/ai/](backend/src/services/ai/)
 
-- **Behind an interface.** `TicketClassifier` (`types.ts`) is the only thing the ticket service knows about. `OpenAiClassifier` is the real implementation; tests inject a fake, so no SDK mocking or network is needed.
+- **Behind an interface.** `TicketClassifier` (`types.ts`) is the only thing the ticket service knows about. `createOpenAiClassifier()` builds the real implementation; tests inject a fake, so no SDK mocking or network is needed.
 - **Structured Outputs.** The request asks for a JSON schema with `enum`s for category and priority (`strict: true`).
 - **AI output is untrusted.** Even with Structured Outputs, the response is parsed and re-validated against exact allowlists (`classification.ts`): no case folding, no coercion, no extra keys. The service validates again before saving (defence in depth), and the database has `CHECK` constraints as a last line.
 - **Prompt-injection hygiene.** Ticket text is wrapped in `<ticket>` tags and the system prompt tells the model to treat it as data. Even a successful injection can only ever produce one of the allowlisted values.
 - **Timeout.** The service enforces `AI_TIMEOUT_MS` itself (`withTimeout`) and aborts the in-flight request, so a hung call can never hang a request.
 - **Documented fallback.** If the AI times out, errors, refuses, or returns anything outside the allowlists, the ticket is **still saved** with `category: General`, `priority: Medium`, `aiStatus: "fallback"` and an `aiFallbackReason` (`timeout`, `ai_error`, `invalid_response` or `ai_unavailable`). The API still returns `201` and the UI shows a "Default classification used" notice, so users never lose a ticket because of an AI outage.
 - **No secrets leaked.** The key is read only from the environment. Upstream error messages are never returned to clients or logged verbatim (only the error class name is kept).
-- **No key configured.** The server starts with a warning and uses `UnavailableClassifier` (reason `ai_unavailable`).
+- **No key configured.** The server starts with a warning and uses `createUnavailableClassifier()` (reason `ai_unavailable`).
 
 ---
 
@@ -270,7 +270,8 @@ Request flow: `route → validate (Zod) → controller → TicketService → { T
 ## Design notes
 
 - **Express 5**: async handlers propagate rejections to the error middleware without wrappers.
-- **Dependency injection** (`createApp({ ticketService })`, `new TicketService({ repository, classifier })`) keeps modules decoupled and tests simple.
+- **Functions over classes**: there are no `class` declarations. Services, repositories and classifiers are factory functions (`createTicketService`, `createTicketRepository`, `createOpenAiClassifier`) that return plain objects typed by an interface. Custom errors are factories plus type guards (`createAppError` / `isAppError`, `createClassifierError` / `isClassifierError`, `createTimeoutError` / `isTimeoutError`, `createApiError` / `isApiError`). The frontend uses function components and hooks only.
+- **Dependency injection** (`createApp({ ticketService })`, `createTicketService({ repository, classifier })`) keeps modules decoupled and tests simple.
 - **Security**: `helmet`, CORS allowlist, 16 KB body limit, rate limit on ticket creation, parameterised SQL, whitelisted `ORDER BY`, escaped `LIKE` wildcards, strict env validation.
 - **Server-side filtering/pagination** keeps the API scalable; the UI debounces search and discards stale responses with `AbortController`.
 - **SQLite** is used for simplicity. Swapping to PostgreSQL/MySQL only touches `db/` and `repositories/`.

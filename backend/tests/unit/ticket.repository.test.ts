@@ -1,11 +1,11 @@
 import { openDatabase } from '../../src/db/connection';
-import { TicketRepository } from '../../src/repositories/ticket.repository';
+import { createTicketRepository } from '../../src/repositories/ticket.repository';
 
 const base = { title: 'T', description: 'D', customerEmail: 'a@b.com', category: 'General', priority: 'Low', aiStatus: 'classified', aiFallbackReason: null } as const;
 
 describe('TicketRepository', () => {
   it('creates tickets with generated id and timestamp', () => {
-    const repo = new TicketRepository(openDatabase(':memory:'));
+    const repo = createTicketRepository(openDatabase(':memory:'));
     const t = repo.create(base);
     expect(t.id).toHaveLength(36);
     expect(new Date(t.createdAt).toISOString()).toBe(t.createdAt);
@@ -13,7 +13,7 @@ describe('TicketRepository', () => {
   });
 
   it('persists fallback metadata', () => {
-    const repo = new TicketRepository(openDatabase(':memory:'));
+    const repo = createTicketRepository(openDatabase(':memory:'));
     const t = repo.create({ ...base, aiStatus: 'fallback', aiFallbackReason: 'timeout' });
     expect(repo.list({ sort: 'newest', page: 1, limit: 10 }).rows[0]).toMatchObject({ id: t.id, aiStatus: 'fallback', aiFallbackReason: 'timeout' });
   });
